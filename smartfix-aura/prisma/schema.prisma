@@ -1,4 +1,4 @@
-generator client {
+﻿generator client {
   provider = "prisma-client-js"
 }
 
@@ -8,31 +8,40 @@ datasource db {
 }
 
 model Product {
-  arrivalDate DateTime? // Дата очікування (для PRE_ORDER)
-  quantity    Int       @default(1) // Кількість на складі (для партій PRE_ORDER)
-  id               String   @id @default(cuid())
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id               String        @id @default(cuid())
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  
   title            String
-  slug             String   @unique
+  slug             String        @unique
   brand            String
   model            String
   description      String?
   price            Decimal
-  purchaseCost     Decimal  @default(0)
-  repairCost       Decimal  @default(0)
+  purchaseCost     Decimal       @default(0)
+  repairCost       Decimal       @default(0)
+  
   images           String[]
   status           ProductStatus @default(AVAILABLE)
+  
+  arrivalDate      DateTime?
   estimatedArrival DateTime?
-  checklist        Json?
-  upgrades         Json?    
+  quantity         Int           @default(1)
+
   category         Category
   grade            Grade
   storage          String
   color            String
+  
+  // SPECS
   cpu              String?
   ram              String?
+  gpu              String?
+  screenSize       String?
   
+  checklist        Json?
+  upgrades         Json?
+
   orderItems       OrderItem[]
   requests         ProductRequest[]
 }
@@ -51,7 +60,6 @@ model Order {
   warrantyType   String      @default("BASIC")
   warrantyPrice  Decimal     @default(0)
   userId         String?
-  
   items          OrderItem[]
 }
 
@@ -59,61 +67,11 @@ model OrderItem {
   id             String   @id @default(cuid())
   orderId        String
   order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
   productId      String
   product        Product  @relation(fields: [productId], references: [id])
-  
   quantity       Int      @default(1)
-  price          Decimal  
+  price          Decimal
   selectedOptions String[] 
-}
-
-model TradeInRequest {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  model     String
-  storage   String
-  condition String
-  name      String
-  phone     String
-  images    String[]
-  userId    String?
-  status    String   @default("NEW")
-}
-
-model ProductRequest {
-  id             String   @id @default(cuid())
-  createdAt      DateTime @default(now())
-  targetProduct  String
-  budget         String
-  desiredStorage String?
-  desiredColor   String?
-  desiredGrade   String?
-  customerName   String
-  phone          String
-  userId         String?
-  status         String   @default("NEW")
-  
-  offeredProductId String?
-  offeredProduct   Product? @relation(fields: [offeredProductId], references: [id])
-}
-
-model CategoryMetadata {
-  id          String @id 
-  imageUrl    String
-  description String
-  color       String
-  buttonText  String
-}
-
-model PromoBanner {
-  id        String   @id @default(cuid())
-  title     String
-  subtitle  String?
-  image     String
-  link      String
-  size      String   @default("STANDARD")
-  order     Int      @default(0)
 }
 
 model ServiceDevice {
@@ -129,26 +87,91 @@ model ServiceItem {
   id        String        @id @default(cuid())
   title     String
   price     Decimal
-  partCost  Decimal       @default(0)
   duration  String
-  device    ServiceDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  partCost  Decimal       @default(0)
   deviceId  String
+  device    ServiceDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+}
+
+model ServiceAddon {
+  id          String   @id @default(cuid())
+  label       String
+  price       Decimal
+  description String?
+  category    Category
+  isPopular   Boolean  @default(false)
 }
 
 model RepairOrder {
-  id           String   @id @default(cuid())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deviceName   String
-  serviceName  String
-  price        Decimal
-  cost         Decimal  @default(0)
-  status       String   @default("NEW")
-  customerName String
-  phone        String
-  userId       String?
-  images       String[]
-  internalNotes String? @db.Text
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  status        String   @default("NEW")
+  deviceName    String
+  serviceName   String
+  addons        Json?
+  price         Decimal
+  cost          Decimal  @default(0)
+  customerName  String
+  phone         String
+  userId        String?
+  images        String[]
+  internalNotes String?  @db.Text
+}
+
+model TradeInRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  model     String
+  storage   String
+  condition String
+  images    String[]
+  name      String
+  phone     String
+  userId    String?
+  status    String   @default("NEW")
+}
+
+model ProductRequest {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  targetProduct  String
+  budget         String
+  desiredStorage String?
+  desiredColor   String?
+  desiredGrade   String?
+  
+  // Tech Specs
+  desiredCpu     String?
+  desiredRam     String?
+  desiredGpu     String?
+  desiredScreen  String?
+  clientNotes    String?
+
+  customerName   String
+  phone          String
+  userId         String?
+  status         String   @default("NEW")
+  offeredProductId String?
+  offeredProduct   Product? @relation(fields: [offeredProductId], references: [id])
+}
+
+model PromoBanner {
+  id        String   @id @default(cuid())
+  title     String
+  subtitle  String?
+  image     String
+  link      String
+  size      String   @default("STANDARD")
+  order     Int      @default(0)
+}
+
+model CategoryMetadata {
+  id          String @id
+  imageUrl    String
+  description String
+  color       String
+  buttonText  String
 }
 
 enum ProductStatus {

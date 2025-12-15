@@ -1,18 +1,19 @@
-'use client'
+﻿"use client"
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { toast } from 'sonner'
+import { createContext, useContext, useEffect, useState } from "react"
+import { toast } from "sonner"
 
 export type CartItem = {
-  cartId: string // Унікальний ID для кошика (бо один товар може бути з різними опціями)
-  id: string     // Real Product ID
+  cartId: string
+  id: string
   title: string
   price: number
-  basePrice: number // Ціна без опцій
+  basePrice: number
   image: string
   slug: string
   quantity: number
   selectedOptions: { label: string; price: number }[]
+  status?: string // Додаємо статус для відображення бейджів
 }
 
 type CartContextType = {
@@ -20,71 +21,101 @@ type CartContextType = {
   addItem: (product: any, options?: any[]) => void
   removeItem: (cartId: string) => void
   clearCart: () => void
+  removeAll: () => void // Аліас для сумісності з page.tsx
   totalPrice: number
+  
+  // Logic for Warranty Upsell
+  warranty: boolean
+  toggleWarranty: () => void
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const [warranty, setWarranty] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
 
+  // Load from LocalStorage
   useEffect(() => {
-    const saved = localStorage.getItem('smartfix-cart-v2')
-    if (saved) {
-      try { setItems(JSON.parse(saved)) } catch (e) {}
+    const savedItems = localStorage.getItem("smartfix-cart-v2")
+    const savedWarranty = localStorage.getItem("smartfix-cart-warranty")
+    
+    if (savedItems) {
+      try { setItems(JSON.parse(savedItems)) } catch (e) {}
+    }
+    if (savedWarranty) {
+      setWarranty(savedWarranty === "true")
     }
     setIsLoaded(true)
   }, [])
 
+  // Save to LocalStorage
   useEffect(() => {
-    if (isLoaded) localStorage.setItem('smartfix-cart-v2', JSON.stringify(items))
-  }, [items, isLoaded])
+    if (isLoaded) {
+      localStorage.setItem("smartfix-cart-v2", JSON.stringify(items))
+      localStorage.setItem("smartfix-cart-warranty", String(warranty))
+    }
+  }, [items, warranty, isLoaded])
 
   const addItem = (product: any, options: { label: string; price: number }[] = []) => {
     const optionsPrice = options.reduce((acc, opt) => acc + opt.price, 0)
-    const finalPrice = product.price + optionsPrice
+    const finalPrice = Number(product.price) + optionsPrice
     
-    // Генеруємо унікальний ID для товару в кошику (Product ID + Options)
-    const cartId = `${product.id}-${options.map(o => o.label).sort().join('')}`
+    const cartId = `${product.id}-${options.map(o => o.label).sort().join("")}`
 
     setItems((current) => {
-      // Якщо такий самий конфіг вже є - не додаємо дубль (для унікальних товарів)
       const existing = current.find((i) => i.cartId === cartId)
       if (existing) {
-        toast.info('Цей товар вже в кошику')
+        toast.info("Цей товар вже в кошику")
         return current
       }
       
-      toast.success('Додано в кошик!')
+      toast.success("Додано в кошик!")
       return [...current, { 
           cartId,
           id: product.id,
           title: product.title,
           price: finalPrice,
-          basePrice: product.price,
-          image: product.image,
+          basePrice: Number(product.price),
+          image: product.images?.[0] || product.image || "", // Handle varying image fields
           slug: product.slug,
           quantity: 1,
-          selectedOptions: options
+          selectedOptions: options,
+          status: product.status // Pass status
       }]
     })
   }
 
   const removeItem = (cartId: string) => {
     setItems((current) => current.filter((i) => i.cartId !== cartId))
-    toast.error('Товар видалено')
+    toast.error("Товар видалено")
   }
 
   const clearCart = () => {
     setItems([])
-    localStorage.removeItem('smartfix-cart-v2')
+    setWarranty(false)
+    localStorage.removeItem("smartfix-cart-v2")
+    localStorage.removeItem("smartfix-cart-warranty")
   }
 
-  const totalPrice = items.reduce((acc, item) => acc + item.price, 0)
+  const toggleWarranty = () => {
+    setWarranty((prev) => !prev)
+  }
+
+  const totalPrice = items.reduce((acc, item) => acc + item.price, 0) + (warranty ? 45 : 0)
 
   return (
-    <CartContext.Provider value={{ items, addItem, removeItem, clearCart, totalPrice }}>
+    <CartContext.Provider value={{ 
+      items, 
+      addItem, 
+      removeItem, 
+      clearCart, 
+      removeAll: clearCart, // Alias implementation
+      totalPrice,
+      warranty,
+      toggleWarranty
+    }}>
       {children}
     </CartContext.Provider>
   )
@@ -92,6 +123,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export const useCart = () => {
   const context = useContext(CartContext)
-  if (!context) throw new Error('useCart must be used within a CartProvider')
+  if (!context) throw new Error("useCart must be used within a CartProvider")
   return context
 }

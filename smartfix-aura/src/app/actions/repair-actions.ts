@@ -1,55 +1,83 @@
-'use server'
+﻿"use server"
 
-import db from '@/lib/db'
-import { auth } from '@clerk/nextjs/server'
+import db from "@/lib/db"
+import { revalidatePath } from "next/cache"
+import { z } from "zod"
 
-export async function createRepairOrder(formData: FormData) {
-  const { userId } = auth()
+// Схема валідації
+const RepairOrderSchema = z.object({
+  deviceName: z.string().min(1, "Оберіть пристрій"),
+  serviceName: z.string().min(1, "Оберіть послугу"),
+  price: z.coerce.number(),
+  customerName: z.string().min(2, "Введіть ім'я"),
+  phone: z.string().min(10, "Введіть коректний номер"),
+  upsells: z.array(z.string()).optional() // IDs of ServiceAddon
+})
 
-  const deviceName = formData.get('deviceName') as string
-  const serviceName = formData.get('serviceName') as string
-  const price = parseFloat(formData.get('price') as string)
-  const name = formData.get('customerName') as string
-  const phone = formData.get('phone') as string
-
-  if (!name || !phone) return { error: 'Вкажіть імʼя та телефон' }
-
+// --- DATA FETCHING ---
+export async function getRepairPageData() {
   try {
-    // 1. Спробуємо знайти цей сервіс в базі, щоб дізнатися його собівартість (partCost)
-    // Ми шукаємо по назві пристрою та назві послуги
-    // Це "м'який" пошук, бо дані можуть бути захардкоджені на фронті, але ми спробуємо знайти точний матч
-    
-    let cost = 0;
-    
-    const device = await db.serviceDevice.findFirst({
-        where: { name: deviceName },
-        include: { services: true }
+    const devices = await db.serviceDevice.findMany({
+      include: { 
+        services: {
+          orderBy: { price: 'asc' }
+        } 
+      }
     })
 
-    if (device) {
-        const service = device.services.find(s => s.title === serviceName)
-        if (service) {
-            cost = Number(service.partCost)
-        }
-    }
+    const addons = await db.serviceAddon.findMany({
+      orderBy: { price: 'asc' }
+    })
 
-    // 2. Створюємо замовлення з заповненим полем cost
+    return { devices, addons }
+  } catch (error) {
+    console.error("Error fetching repair data:", error)
+    return { devices: [], addons: [] }
+  }
+}
+
+// --- MUTATIONS ---
+export async function createRepairOrder(formData: FormData) {
+  const rawData = {
+    deviceName: formData.get("deviceName"),
+    serviceName: formData.get("serviceName"), // Base service name
+    price: formData.get("price"),
+    customerName: formData.get("customerName"),
+    phone: formData.get("phone"),
+    // Upsells IDs passed as JSON string or multiple fields? Let's assume passed as JSON string for simplicity
+    upsells: JSON.parse(formData.get("upsells") as string || "[]") 
+  }
+
+  const validated = RepairOrderSchema.safeParse(rawData)
+
+  if (!validated.success) {
+    return { error: validated.error.errors[0].message }
+  }
+
+  const { deviceName, serviceName, price, customerName, phone, upsells } = validated.data
+
+  try {
+    // Fetch addon details to snapshot them in the order
+    const selectedAddons = await db.serviceAddon.findMany({
+      where: { id: { in: upsells } }
+    })
+
     await db.repairOrder.create({
       data: {
         deviceName,
         serviceName,
         price,
-        cost, // <--- Записуємо собівартість
-        customerName: name,
+        customerName,
         phone,
-        userId: userId || null,
-        status: 'NEW'
+        status: "NEW",
+        addons: selectedAddons // Saving snapshot of what was selected
       }
     })
 
+    revalidatePath("/dashboard/repair")
     return { success: true }
-  } catch (e) {
-    console.error(e)
-    return { error: 'Помилка створення заявки' }
+  } catch (error) {
+    console.error("Repair Order Error:", error)
+    return { error: "Помилка створення заявки. Спробуйте пізніше." }
   }
 }

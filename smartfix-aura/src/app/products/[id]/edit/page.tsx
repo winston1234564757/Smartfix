@@ -1,29 +1,38 @@
-import db from "@/lib/db"
+﻿import db from "@/lib/db"
 import { notFound } from "next/navigation"
 import { ProductForm } from "@/components/admin/ProductForm"
+import { Button } from "@/components/ui/button"
+import { ArrowLeft } from "lucide-react"
+import Link from "next/link"
 
 interface Props { params: { id: string } }
 
 export default async function EditProductPage({ params }: Props) {
   const { id } = await params
-  
   const product = await db.product.findUnique({ where: { id } })
 
   if (!product) return notFound()
 
-  // Серіалізація Decimal для передачі в Client Component
+  // SERIALIZATION
   const serializedProduct = {
       ...product,
       price: Number(product.price),
       purchaseCost: Number(product.purchaseCost),
-      repairCost: Number(product.repairCost),
-      // JSON поля вже є об"єктами, якщо Prisma їх так повернула, або потребують парсингу, якщо це рядки.
-      // У нашій схемі це Json?, тому Prisma повертає об"єкт.
+      repairCost: Number(product.repairCost)
   }
 
   return (
-    <div className="max-w-[1600px] mx-auto p-6">
-        <h1 className="text-3xl font-black text-slate-900 mb-8">Редагування товару</h1>
+    <div className="w-full p-6"> {/* Removed max-w constraints */}
+        <div className="flex items-center gap-4 mb-8">
+            <Link href="/products">
+                <Button variant="outline" size="icon" className="rounded-full"><ArrowLeft className="w-5 h-5"/></Button>
+            </Link>
+            <div>
+                <h1 className="text-3xl font-black text-slate-900">Редагування</h1>
+                <p className="text-slate-500">{product.title}</p>
+            </div>
+        </div>
+        
         <ProductForm initialData={serializedProduct} />
     </div>
   )

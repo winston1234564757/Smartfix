@@ -1,15 +1,17 @@
-import { PromoGrid } from "@/components/shop/PromoGrid"
+﻿import { PromoGrid } from "@/components/shop/PromoGrid"
 import db from "@/lib/db"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Smartphone, Sparkles, Star, ArrowUpRight, Clock, RefreshCcw, ShoppingCart, Laptop, Cpu, MemoryStick, HardDrive } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { ArrowRight, Smartphone, Sparkles, Star, ArrowUpRight, Clock, RefreshCcw, ShoppingCart, Laptop, Cpu, MemoryStick, HardDrive, Search } from "lucide-react"
 
 // --- КАРТКА ТОВАРУ ---
 function ProductCard({ product }: { product: any }) {
   const formattedPrice = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(Number(product.price))
+  
   const isPreOrder = product.status === "PRE_ORDER"
+  const isOnRequest = product.status === "ON_REQUEST"
   const isSold = product.status === "SOLD"
+  
   const isLaptop = product.category === "LAPTOP"
 
   return (
@@ -30,7 +32,10 @@ function ProductCard({ product }: { product: any }) {
              <div className="bg-white/90 backdrop-blur-md text-slate-900 text-[10px] font-extrabold px-3 py-1.5 rounded-full shadow-sm tracking-wide uppercase">
                 {product.grade?.replace("_", "+") || "USED"}
              </div>
+             
+             {/* БЕЙДЖІ СТАТУСІВ */}
              {isPreOrder && <div className="bg-purple-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1"><Clock className="w-3 h-3"/> PRE</div>}
+             {isOnRequest && <div className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1"><Search className="w-3 h-3"/> ЗАПИТ</div>}
              {isSold && <div className="bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">SOLD</div>}
           </div>
         </div>
@@ -38,11 +43,10 @@ function ProductCard({ product }: { product: any }) {
         {/* ІНФО */}
         <div className="flex-1 flex flex-col justify-between px-2">
            <div>
-               {/* ХАРАКТЕРИСТИКИ (ВИПРАВЛЕНО) */}
+               {/* ХАРАКТЕРИСТИКИ */}
                <div className="mb-3 min-h-[20px]">
                   {isLaptop ? (
                       <div className="flex flex-wrap gap-2">
-                        {/* Перевіряємо чи є дані, якщо немає - пишемо прочерк */}
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-slate-100 px-2 py-1 rounded-md text-slate-600 border border-slate-200">
                             <Cpu className="w-3 h-3 text-indigo-500"/> {product.cpu || '-'}
                         </span>
@@ -70,14 +74,20 @@ function ProductCard({ product }: { product: any }) {
            <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
              <span className="font-black text-3xl text-slate-900 tracking-tight">{formattedPrice}</span>
              
+             {/* КНОПКА НА КАРТЦІ */}
              <div className={`h-12 px-5 rounded-full flex items-center gap-2 transition-all duration-300 shadow-md group-hover:scale-105 ${
                 isSold ? "bg-slate-100 text-slate-500 group-hover:bg-slate-800 group-hover:text-white" :
                 isPreOrder ? "bg-purple-100 text-purple-700 group-hover:bg-purple-600 group-hover:text-white" : 
+                isOnRequest ? "bg-blue-100 text-blue-700 group-hover:bg-blue-600 group-hover:text-white" :
                 "bg-indigo-600 text-white shadow-indigo-200 group-hover:bg-indigo-700"
              }`}>
-               {isSold ? <RefreshCcw className="w-4 h-4" /> : isPreOrder ? <Clock className="w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />}
+               {isSold ? <RefreshCcw className="w-4 h-4" /> : 
+                isPreOrder ? <Clock className="w-4 h-4" /> : 
+                isOnRequest ? <Search className="w-4 h-4" /> :
+                <ShoppingCart className="w-4 h-4" />}
+               
                <span className="font-bold text-sm whitespace-nowrap">
-                  {isSold ? "Хочу" : isPreOrder ? "Замовити" : "Купити"}
+                  {isSold ? "Хочу" : isPreOrder ? "Замовити" : isOnRequest ? "Знайти" : "Купити"}
                </span>
              </div>
            </div>
@@ -89,19 +99,18 @@ function ProductCard({ product }: { product: any }) {
 
 export default async function HomePage() {
   const latestProductsRaw = await db.product.findMany({
-    where: { status: { in: ["AVAILABLE", "PRE_ORDER", "SOLD"] } },
+    where: { status: { in: ["AVAILABLE", "PRE_ORDER", "ON_REQUEST", "SOLD"] } },
     orderBy: { createdAt: "desc" },
     take: 8 
   })
 
-  // Сортування + Явне перетворення полів
+  // Сортування: Available -> PreOrder/Request -> Sold
   const latestProducts = latestProductsRaw.sort((a, b) => {
-      const statusOrder = { "AVAILABLE": 1, "PRE_ORDER": 2, "SOLD": 3 } as any
+      const statusOrder = { "AVAILABLE": 1, "PRE_ORDER": 2, "ON_REQUEST": 2, "SOLD": 3 } as any
       return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99)
   }).slice(0, 4).map(p => ({
       ...p,
       price: Number(p.price),
-      // ЯВНО ПРОКИДАЄМО CPU та RAM
       cpu: p.cpu,
       ram: p.ram
   }))
@@ -113,7 +122,7 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-20 overflow-x-hidden">
-       {/* HERO SECTION (Без змін) */}
+       {/* HERO SECTION */}
        <section className="pt-8 pb-12 md:pt-12 md:pb-12 px-4">
           <div className="max-w-[1400px] mx-auto grid lg:grid-cols-2 gap-8 md:gap-16 items-center">
               <div className="relative w-full aspect-square lg:aspect-[4/5] lg:h-[700px] rounded-[3rem] overflow-hidden bg-slate-900 border-4 border-white shadow-2xl shadow-indigo-500/20 order-2 lg:order-1 group">

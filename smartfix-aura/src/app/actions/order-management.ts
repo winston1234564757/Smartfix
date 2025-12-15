@@ -1,52 +1,93 @@
-'use server'
+﻿"use server"
 
-import db from '@/lib/db'
-import { revalidatePath } from 'next/cache'
+import db from "@/lib/db"
+import { revalidatePath } from "next/cache"
 
 export async function updateOrderStatus(orderId: string, newStatus: string) {
   try {
+    // 1. Оновлюємо статус самого замовлення
     await db.order.update({
       where: { id: orderId },
       data: { status: newStatus }
     })
+
+    // 2. БІЗНЕС-ЛОГІКА: Синхронізація товарів
+    const order = await db.order.findUnique({
+        where: { id: orderId },
+        include: { items: true }
+    })
+
+    if (order && order.items.length > 0) {
+        
+        // Якщо замовлення активне (Підтверджено/Відправлено/Виконано) -> Товар ПРОДАНО
+        if (["CONFIRMED", "SHIPPED", "COMPLETED"].includes(newStatus)) {
+            for (const item of order.items) {
+                await db.product.update({
+                    where: { id: item.productId },
+                    data: { status: "SOLD" } 
+                })
+            }
+        }
+
+        // Якщо замовлення скасовано -> Товар ПОВЕРТАЄТЬСЯ
+        if (newStatus === "CANCELLED") {
+            for (const item of order.items) {
+                await db.product.update({
+                    where: { id: item.productId },
+                    data: { status: "AVAILABLE" }
+                })
+            }
+        }
+        
+        // Якщо повернули в "Очікує" (наприклад, помилково клацнули) -> Товар в РЕЗЕРВ
+        if (newStatus === "PENDING") {
+            for (const item of order.items) {
+                await db.product.update({
+                    where: { id: item.productId },
+                    data: { status: "RESERVED" }
+                })
+            }
+        }
+    }
     
-    revalidatePath('/orders')
-    return { success: true, message: 'РЎС‚Р°С‚СѓСЃ РѕРЅРѕРІР»РµРЅРѕ' }
+    revalidatePath("/dashboard/orders")
+    revalidatePath("/products")
+    revalidatePath("/catalog")
+    
+    return { success: true, message: "Статус оновлено" }
   } catch (e) {
-    return { error: 'РџРѕРјРёР»РєР° РѕРЅРѕРІР»РµРЅРЅСЏ СЃС‚Р°С‚СѓСЃСѓ' }
+    console.error(e)
+    return { error: "Помилка оновлення статусу" }
   }
 }
 
 export async function deleteOrder(orderId: string) {
   try {
-    // РЎРїРѕС‡Р°С‚РєСѓ Р·РЅР°С…РѕРґРёРјРѕ Р·Р°РјРѕРІР»РµРЅРЅСЏ, С‰РѕР± РґС–Р·РЅР°С‚РёСЃСЊ ID С‚РѕРІР°СЂСѓ
     const order = await db.order.findUnique({
       where: { id: orderId },
-      include: { products: true }
+      include: { items: true }
     })
 
-    if (!order) return { error: 'Р—Р°РјРѕРІР»РµРЅРЅСЏ РЅРµ Р·РЅР°Р№РґРµРЅРѕ' }
+    if (!order) return { error: "Замовлення не знайдено" }
 
-    // РўСЂР°РЅР·Р°РєС†С–СЏ: Р’РёРґР°Р»СЏС”РјРѕ РѕСЂРґРµСЂ + РїРѕРІРµСЂС‚Р°С”РјРѕ С‚РѕРІР°СЂ Сѓ РїСЂРѕРґР°Р¶ (СЏРєС‰Рѕ С‚СЂРµР±Р°)
     await db.$transaction(async (tx) => {
-      // 1. Р’РёРґР°Р»СЏС”РјРѕ Р·Р°РјРѕРІР»РµРЅРЅСЏ
-      await tx.order.delete({ where: { id: orderId } })
-
-      // 2. РЇРєС‰Рѕ Р·Р°РјРѕРІР»РµРЅРЅСЏ СЃРєР°СЃРѕРІР°РЅРѕ Р°Р±Рѕ РІРёРґР°Р»РµРЅРѕ, Р»РѕРіС–С‡РЅРѕ РїРѕРІРµСЂРЅСѓС‚Рё С‚РѕРІР°СЂРё РЅР° РІС–С‚СЂРёРЅСѓ?
-      // РўСѓС‚ РјРё Р·СЂРѕР±РёРјРѕ РїСЂРѕСЃС‚Рѕ: РїРѕРІРµСЂС‚Р°С”РјРѕ СЃС‚Р°С‚СѓСЃ AVAILABLE РґР»СЏ РІСЃС–С… С‚РѕРІР°СЂС–РІ С†СЊРѕРіРѕ Р·Р°РјРѕРІР»РµРЅРЅСЏ
-      for (const product of order.products) {
+      // Повертаємо товар на вітрину
+      for (const item of order.items) {
         await tx.product.update({
-          where: { id: product.id },
-          data: { status: 'AVAILABLE' }
+          where: { id: item.productId },
+          data: { status: "AVAILABLE" }
         })
       }
+      await tx.order.delete({ where: { id: orderId } })
     })
 
-    revalidatePath('/orders')
-    revalidatePath('/products') // Р‘Рѕ СЃС‚Р°С‚СѓСЃРё С‚РѕРІР°СЂС–РІ Р·РјС–РЅРёР»РёСЃСЊ
-    return { success: true, message: 'Р—Р°РјРѕРІР»РµРЅРЅСЏ РІРёРґР°Р»РµРЅРѕ, С‚РѕРІР°СЂРё РїРѕРІРµСЂРЅСѓС‚Рѕ РЅР° СЃРєР»Р°Рґ' }
+    revalidatePath("/dashboard/orders")
+    revalidatePath("/products")
+    revalidatePath("/catalog")
+    
+    return { success: true, message: "Замовлення видалено, товар доступний" }
   } catch (e) {
     console.error(e)
-    return { error: 'РџРѕРјРёР»РєР° РІРёРґР°Р»РµРЅРЅСЏ' }
+    return { error: "Помилка видалення" }
   }
 }

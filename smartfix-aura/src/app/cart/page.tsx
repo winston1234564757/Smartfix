@@ -1,12 +1,11 @@
-"use client"
+﻿"use client"
 
-import { useCart } from "@/hooks/use-cart" // Переконайтеся, що цей шлях вірний
+import { useCart } from "@/context/cart-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Trash2, ShieldCheck, MapPin, Truck, Clock, Package, AlertCircle } from "lucide-react"
+import { Trash2, ShieldCheck, Truck, Clock, Package, Search } from "lucide-react"
 import { useState, useEffect } from "react"
 import { createOrder } from "@/app/actions/orders"
 import { toast } from "sonner"
@@ -23,23 +22,25 @@ export default function CartPage() {
 
   if (!mounted) return null
 
-  const total = cart.items.reduce((acc, item) => acc + Number(item.price), 0) + (cart.warranty ? 45 : 0)
+  const itemsTotal = cart.items.reduce((acc, item) => acc + Number(item.price), 0)
+  const warrantyPrice = 45
+  const total = itemsTotal + (cart.warranty ? warrantyPrice : 0)
 
   // --- ЛОГІКА СТАТУСІВ ---
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status?: string) => {
       switch (status) {
           case "PRE_ORDER":
               return <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-0">Передзамовлення</Badge>
           case "ON_REQUEST":
               return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-0">Під запит</Badge>
           case "RESERVED":
-              return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-0">Резерв</Badge>
+              return <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-0">В черзі</Badge>
           default:
-              return null // Для звичайних товарів нічого не показуємо або можна <Badge className="bg-green-100...">В наявності</Badge>
+              return <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-200 border-0">В наявності</Badge>
       }
   }
 
-  const getStatusNote = (status: string) => {
+  const getStatusNote = (status?: string) => {
       switch (status) {
           case "PRE_ORDER":
               return <div className="flex items-center gap-1.5 text-xs text-purple-600 font-medium mt-1"><Clock className="w-3.5 h-3.5"/> Очікування: 14-20 днів</div>
@@ -59,7 +60,7 @@ export default function CartPage() {
       formData.append("total", total.toString())
       if (cart.warranty) {
           formData.append("warranty", "EXTENDED")
-          formData.append("warrantyPrice", "45")
+          formData.append("warrantyPrice", warrantyPrice.toString())
       }
 
       const res = await createOrder(formData)
@@ -69,7 +70,8 @@ export default function CartPage() {
       } else {
           toast.success("Замовлення успішне!")
           cart.removeAll()
-          router.push("/dashboard/orders") // Або на сторінку "Дякуємо"
+          // FIX: Redirect to Client Orders instead of Admin Dashboard
+          router.push("/orders") 
       }
       setLoading(false)
   }
@@ -98,11 +100,11 @@ export default function CartPage() {
             <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-6 space-y-6">
                     {cart.items.map((item) => (
-                        <div key={item.id} className="flex gap-4 group">
+                        <div key={item.cartId} className="flex gap-4 group">
                             {/* ФОТО */}
                             <div className="w-24 h-24 bg-slate-50 rounded-xl border border-slate-100 overflow-hidden shrink-0 relative">
-                                {item.images && item.images[0] ? (
-                                    <img src={item.images[0]} className="w-full h-full object-cover" />
+                                {item.image ? (
+                                    <img src={item.image} className="w-full h-full object-cover" alt={item.title} />
                                 ) : (
                                     <div className="flex items-center justify-center h-full"><Package className="w-8 h-8 text-slate-300"/></div>
                                 )}
@@ -113,16 +115,13 @@ export default function CartPage() {
                                 <div>
                                     <div className="flex justify-between items-start gap-2">
                                         <h3 className="font-bold text-slate-900 text-lg leading-tight">{item.title}</h3>
-                                        <button type="button" onClick={() => cart.removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                                        <button type="button" onClick={() => cart.removeItem(item.cartId)} className="text-slate-300 hover:text-red-500 transition-colors">
                                             <Trash2 className="w-5 h-5"/>
                                         </button>
                                     </div>
                                     
-                                    {/* --- ОСЬ ТУТ ДОДАНІ СТАТУСИ --- */}
                                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                                         {getStatusBadge(item.status)}
-                                        
-                                        {/* Специфікації (Опції) */}
                                         {item.selectedOptions && item.selectedOptions.map((opt: any, idx: number) => (
                                             <Badge key={idx} variant="outline" className="text-xs text-slate-500 border-slate-200">
                                                 {opt.label}
@@ -130,7 +129,6 @@ export default function CartPage() {
                                         ))}
                                     </div>
 
-                                    {/* Підказка про доставку */}
                                     {getStatusNote(item.status)}
                                 </div>
 
@@ -140,30 +138,18 @@ export default function CartPage() {
                     ))}
                 </div>
                 
-                {/* ГАРАНТІЯ */}
-                <div className="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors" onClick={cart.toggleWarranty}>
+                {/* ГАРАНТІЯ - UPSELL */}
+                <div className="bg-slate-50 p-4 border-t border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition-colors select-none" onClick={cart.toggleWarranty}>
                     <div className="flex items-center gap-4">
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${cart.warranty ? "bg-indigo-600 border-indigo-600" : "border-slate-300"}`}>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-300 ${cart.warranty ? "bg-indigo-600 border-indigo-600 scale-110" : "border-slate-300 bg-white"}`}>
                             {cart.warranty && <ShieldCheck className="w-3.5 h-3.5 text-white"/>}
                         </div>
                         <div>
                             <p className="font-bold text-slate-900 text-sm">Розширена гарантія (+1 Рік)</p>
-                            <p className="text-xs text-slate-500">Безкоштовний ремонт або заміна пристрою протягом року.</p>
+                            <p className="text-xs text-slate-500">Безкоштовний ремонт або заміна протягом року.</p>
                         </div>
                     </div>
                     <span className="font-bold text-indigo-600 text-sm">+$45</span>
-                </div>
-            </div>
-
-            {/* UPSELL (З цим купують) - Плейсхолдер */}
-            <div>
-                <h3 className="text-sm font-bold text-slate-500 uppercase mb-4 pl-2">З цим купують</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {[1,2].map(i => (
-                        <div key={i} className="h-32 bg-slate-50 rounded-2xl border border-dashed border-slate-200 flex items-center justify-center text-slate-300 text-xs font-bold uppercase">
-                            Аксесуар
-                        </div>
-                    ))}
                 </div>
             </div>
         </div>
@@ -175,22 +161,22 @@ export default function CartPage() {
             <div className="space-y-4">
                 <div className="space-y-2">
                     <Label>Ваше Ім'я</Label>
-                    <Input name="customerName" placeholder="Іван Петренко" required className="rounded-xl bg-slate-50 border-slate-200 h-11"/>
+                    <Input name="customerName" placeholder="Іван Петренко" required className="rounded-xl bg-slate-50 border-slate-200 h-11 focus:border-indigo-500 transition-colors"/>
                 </div>
                 <div className="space-y-2">
                     <Label>Телефон</Label>
-                    <Input name="phone" placeholder="098..." required className="rounded-xl bg-slate-50 border-slate-200 h-11"/>
+                    <Input name="phone" placeholder="098..." required className="rounded-xl bg-slate-50 border-slate-200 h-11 focus:border-indigo-500 transition-colors"/>
                 </div>
                 
                 <Separator />
                 
                 <div className="space-y-2">
                     <Label className="text-xs font-bold text-slate-400 uppercase">Місто доставки</Label>
-                    <Input name="city" placeholder="Київ" className="rounded-xl bg-slate-50 border-slate-200 h-11"/>
+                    <Input name="city" placeholder="Київ" className="rounded-xl bg-slate-50 border-slate-200 h-11 focus:border-indigo-500 transition-colors"/>
                 </div>
                 <div className="space-y-2">
                     <Label className="text-xs font-bold text-slate-400 uppercase">Відділення / Поштомат</Label>
-                    <Input name="warehouse" placeholder="Відділення №1" className="rounded-xl bg-slate-50 border-slate-200 h-11"/>
+                    <Input name="warehouse" placeholder="Відділення №1" className="rounded-xl bg-slate-50 border-slate-200 h-11 focus:border-indigo-500 transition-colors"/>
                 </div>
             </div>
 
@@ -198,12 +184,12 @@ export default function CartPage() {
 
             <div className="flex justify-between items-center text-sm font-medium text-slate-500">
                 <span>Товари ({cart.items.length})</span>
-                <span>${cart.items.reduce((a,b) => a + Number(b.price), 0)}</span>
+                <span>${itemsTotal}</span>
             </div>
             {cart.warranty && (
-                <div className="flex justify-between items-center text-sm font-medium text-indigo-600">
+                <div className="flex justify-between items-center text-sm font-medium text-indigo-600 animate-in fade-in slide-in-from-right-2">
                     <span>Гарантія Premium</span>
-                    <span>+$45</span>
+                    <span>+${warrantyPrice}</span>
                 </div>
             )}
             
@@ -212,7 +198,7 @@ export default function CartPage() {
                 <span className="font-black text-2xl text-slate-900">${total}</span>
             </div>
 
-            <Button type="submit" disabled={loading} className="w-full h-14 rounded-xl bg-slate-900 hover:bg-indigo-600 text-lg font-bold shadow-lg shadow-indigo-500/20 transition-all">
+            <Button type="submit" disabled={loading} className="w-full h-14 rounded-xl bg-slate-900 hover:bg-indigo-600 text-lg font-bold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all active:scale-95">
                 {loading ? "Обробка..." : "Підтвердити замовлення"}
             </Button>
         </div>
@@ -220,11 +206,4 @@ export default function CartPage() {
       </form>
     </div>
   )
-}
-
-// Допоміжна іконка пошуку для статусу
-function Search({ className }: { className?: string }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-    )
 }

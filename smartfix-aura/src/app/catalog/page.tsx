@@ -1,8 +1,7 @@
-import db from "@/lib/db"
-import { Badge } from "@/components/ui/badge"
+﻿import db from "@/lib/db"
 import Link from "next/link"
-import { ArrowRight, Search as SearchIcon, X, Smartphone, Clock, RefreshCcw, Filter, ArrowUpRight, ShoppingCart, Laptop, Cpu, MemoryStick, HardDrive } from "lucide-react"
-import { Search } from "@/components/shared/Search"
+import { Search as SearchIcon, X, Smartphone, Clock, RefreshCcw, Filter, ArrowUpRight, ShoppingCart, Laptop, Cpu, MemoryStick, HardDrive, Search, Lock } from "lucide-react"
+import { Search as SearchBar } from "@/components/shared/Search"
 import { Category, Grade } from "@prisma/client"
 import { getCategoryMetadata } from "@/app/actions/category-actions"
 import { cn } from "@/lib/utils"
@@ -29,14 +28,28 @@ type SafeProduct = {
 function ProductCard({ product }: { product: SafeProduct }) {
   const formattedPrice = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0 }).format(product.price)
   const isPreOrder = product.status === "PRE_ORDER"
+  const isOnRequest = product.status === "ON_REQUEST"
   const isSold = product.status === "SOLD"
+  const isReserved = product.status === "RESERVED"
+  
   const isLaptop = product.category === "LAPTOP"
+  const isLeadMagnet = isSold || isReserved || isOnRequest
+
+  // Куди веде кнопка?
+  const buttonHref = isLeadMagnet ? `/request/${product.slug}` : `/product/${product.slug}`
+  
+  // Текст кнопки
+  const buttonText = isSold ? "Хочу" : isReserved ? "В чергу" : isPreOrder ? "Замовити" : isOnRequest ? "Знайти" : "Купити"
+  
+  // Іконка кнопки
+  const ButtonIcon = isSold ? RefreshCcw : isReserved ? Lock : isPreOrder ? Clock : isOnRequest ? Search : ShoppingCart
 
   return (
-    <Link href={`/product/${product.slug}`} className={`group block h-full ${isSold ? "opacity-90 grayscale-[0.2] hover:grayscale-0 hover:opacity-100" : ""}`}>
-      <div className="bg-white rounded-[2.5rem] p-4 pb-6 h-full flex flex-col border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-2 hover:border-indigo-100 relative overflow-hidden">
+    // FIX: Видалили зовнішній Link, замінили на div
+    <div className={`group h-full flex flex-col bg-white rounded-[2.5rem] p-4 pb-6 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-2 hover:border-indigo-100 relative overflow-hidden ${isSold ? "opacity-90 grayscale-[0.2] hover:grayscale-0 hover:opacity-100" : ""}`}>
         
-        <div className="aspect-[4/5] relative bg-slate-50 rounded-[2rem] overflow-hidden mb-6">
+        {/* 1. ФОТО (Посилання на товар) */}
+        <Link href={`/product/${product.slug}`} className="block aspect-[4/5] relative bg-slate-50 rounded-[2rem] overflow-hidden mb-6 cursor-pointer">
           {product.images?.[0] ? (
             <img src={product.images[0]} alt={product.title} className="object-cover w-full h-full transition-transform duration-700 group-hover:scale-110" />
           ) : (
@@ -45,18 +58,20 @@ function ProductCard({ product }: { product: SafeProduct }) {
              </div>
           )}
           
-          <div className="absolute top-4 left-4 flex flex-col gap-2 items-start">
+          <div className="absolute top-4 left-4 flex flex-col gap-2 items-start pointer-events-none">
              <div className="bg-white/90 backdrop-blur-md text-slate-900 text-[10px] font-extrabold px-3 py-1.5 rounded-full shadow-sm tracking-wide uppercase">
                {product.grade?.replace("_", "+") || "USED"}
              </div>
              {isPreOrder && <div className="bg-purple-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1"><Clock className="w-3 h-3"/> PRE</div>}
+             {isOnRequest && <div className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1"><Search className="w-3 h-3"/> ЗАПИТ</div>}
              {isSold && <div className="bg-slate-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">SOLD</div>}
+             {isReserved && <div className="bg-orange-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1"><Lock className="w-3 h-3"/> РЕЗЕРВ</div>}
           </div>
-        </div>
+        </Link>
 
         <div className="flex-1 flex flex-col justify-between px-2">
-           <div>
-               {/* TECH SPECS (ВИПРАВЛЕНО) */}
+           {/* 2. ІНФО (Посилання на товар) */}
+           <Link href={`/product/${product.slug}`} className="block">
                <div className="mb-3 min-h-[20px]">
                   {isLaptop ? (
                       <div className="flex flex-wrap gap-2">
@@ -82,25 +97,27 @@ function ProductCard({ product }: { product: SafeProduct }) {
                <h3 className="font-black text-slate-900 text-xl leading-tight mb-2 line-clamp-2 group-hover:text-indigo-600 transition-colors">
                   {product.title}
                </h3>
-           </div>
+           </Link>
 
            <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100">
              <span className="font-black text-3xl text-slate-900 tracking-tight">{formattedPrice}</span>
              
-             <div className={`h-12 px-5 rounded-full flex items-center gap-2 transition-all duration-300 shadow-md group-hover:scale-105 ${
-                isSold ? "bg-slate-100 text-slate-500 group-hover:bg-slate-800 group-hover:text-white" :
-                isPreOrder ? "bg-purple-100 text-purple-700 group-hover:bg-purple-600 group-hover:text-white" : 
-                "bg-indigo-600 text-white shadow-indigo-200 group-hover:bg-indigo-700"
+             {/* 3. КНОПКА (Окреме посилання) */}
+             <Link href={buttonHref} className={`h-12 px-5 rounded-full flex items-center gap-2 transition-all duration-300 shadow-md hover:scale-105 active:scale-95 ${
+                isSold ? "bg-slate-100 text-slate-500 hover:bg-slate-800 hover:text-white" :
+                isReserved ? "bg-orange-100 text-orange-600 hover:bg-orange-500 hover:text-white" :
+                isPreOrder ? "bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white" : 
+                isOnRequest ? "bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white" :
+                "bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700"
              }`}>
-               {isSold ? <RefreshCcw className="w-4 h-4" /> : isPreOrder ? <Clock className="w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />}
+               <ButtonIcon className="w-4 h-4" />
                <span className="font-bold text-sm whitespace-nowrap">
-                  {isSold ? "Хочу" : isPreOrder ? "Замовити" : "Купити"}
+                  {buttonText}
                </span>
-             </div>
+             </Link>
            </div>
         </div>
-      </div>
-    </Link>
+    </div>
   )
 }
 
@@ -171,7 +188,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: { [k
   const productsRaw = await db.product.findMany({
     orderBy: { createdAt: "desc" },
     where: {
-      status: { in: ["AVAILABLE", "PRE_ORDER", "SOLD"] },
+      status: { in: ["AVAILABLE", "PRE_ORDER", "SOLD", "ON_REQUEST", "RESERVED"] },
       ...(category ? { category } : {}),
       ...(storageParam ? { storage: storageParam } : {}), 
       ...(gradeParam ? { grade: gradeParam as Grade } : {}),
@@ -185,11 +202,10 @@ export default async function CatalogPage({ searchParams }: { searchParams: { [k
   })
 
   const sortedProducts = productsRaw.sort((a, b) => {
-      const statusOrder = { "AVAILABLE": 1, "PRE_ORDER": 2, "SOLD": 3 } as any
+      const statusOrder = { "AVAILABLE": 1, "PRE_ORDER": 2, "ON_REQUEST": 2, "RESERVED": 3, "SOLD": 4 } as any
       return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99)
   })
 
-  // ВАЖЛИВО: Явно прокидаємо поля CPU та RAM
   const products: SafeProduct[] = sortedProducts.map(p => ({
       ...p,
       price: Number(p.price),
@@ -213,7 +229,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: { [k
       <div className="px-4 max-w-2xl mx-auto -mt-6 relative z-20 mb-12 flex flex-col gap-4">
             <div className="bg-white/80 backdrop-blur-xl p-2 rounded-[2rem] shadow-2xl border border-white/50 flex items-center gap-2 ring-1 ring-slate-200/50">
             <div className="p-3 bg-slate-100 rounded-full text-slate-400"><Filter className="w-5 h-5"/></div>
-            <div className="flex-1"><Search placeholder="Знайти iPhone, MacBook..." className="border-none shadow-none bg-transparent h-12 text-lg placeholder:text-slate-400" /></div>
+            <div className="flex-1"><SearchBar placeholder="Знайти iPhone, MacBook..." className="border-none shadow-none bg-transparent h-12 text-lg placeholder:text-slate-400" /></div>
             </div>
             <div className="flex justify-center"><CatalogFilters /></div>
       </div>

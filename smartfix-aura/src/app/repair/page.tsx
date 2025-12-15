@@ -1,16 +1,18 @@
-import db from '@/lib/db'
-import { RepairWizard } from '@/components/shop/RepairWizard'
+﻿import { RepairWizard } from "@/components/shop/RepairWizard"
+import { getRepairPageData } from "@/app/actions/repair-actions"
 
-export const dynamic = 'force-dynamic'
+export const metadata = {
+  title: "Ремонт | SmartFix Aura",
+  description: "Запис на ремонт техніки Apple, Android, ноутбуків та планшетів."
+}
+
+// Щоб дані були свіжі (якщо ціни зміняться в адмінці)
+export const dynamic = "force-dynamic"
 
 export default async function RepairPage() {
-  // 1. Завантажуємо реальні дані з бази
-  const devices = await db.serviceDevice.findMany({
-    include: {
-      services: true
-    }
-  })
+  const { devices, addons } = await getRepairPageData()
 
-  // 2. Передаємо їх у Клієнтський Компонент
-  return <RepairWizard devices={devices} />
+  return (
+    <RepairWizard devices={devices} addons={addons} />
+  )
 }
