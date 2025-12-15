@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  arrivalDate DateTime? // Дата очікування (для PRE_ORDER)
+  quantity    Int       @default(1) // Кількість на складі (для партій PRE_ORDER)
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  title            String
+  slug             String   @unique
+  brand            String
+  model            String
+  description      String?
+  price            Decimal
+  purchaseCost     Decimal  @default(0)
+  repairCost       Decimal  @default(0)
+  images           String[]
+  status           ProductStatus @default(AVAILABLE)
+  estimatedArrival DateTime?
+  checklist        Json?
+  upgrades         Json?    
+  category         Category
+  grade            Grade
+  storage          String
+  color            String
+  cpu              String?
+  ram              String?
+  
+  orderItems       OrderItem[]
+  requests         ProductRequest[]
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  status         String      @default("PENDING")
+  total          Decimal
+  customerName   String
+  phone          String
+  city           String      @default("")
+  warehouse      String      @default("")
+  internalNotes  String?     @db.Text
+  warrantyType   String      @default("BASIC")
+  warrantyPrice  Decimal     @default(0)
+  userId         String?
+  
+  items          OrderItem[]
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id])
+  
+  quantity       Int      @default(1)
+  price          Decimal  
+  selectedOptions String[] 
+}
+
+model TradeInRequest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  model     String
+  storage   String
+  condition String
+  name      String
+  phone     String
+  images    String[]
+  userId    String?
+  status    String   @default("NEW")
+}
+
+model ProductRequest {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  targetProduct  String
+  budget         String
+  desiredStorage String?
+  desiredColor   String?
+  desiredGrade   String?
+  customerName   String
+  phone          String
+  userId         String?
+  status         String   @default("NEW")
+  
+  offeredProductId String?
+  offeredProduct   Product? @relation(fields: [offeredProductId], references: [id])
+}
+
+model CategoryMetadata {
+  id          String @id 
+  imageUrl    String
+  description String
+  color       String
+  buttonText  String
+}
+
+model PromoBanner {
+  id        String   @id @default(cuid())
+  title     String
+  subtitle  String?
+  image     String
+  link      String
+  size      String   @default("STANDARD")
+  order     Int      @default(0)
+}
+
+model ServiceDevice {
+  id        String        @id @default(cuid())
+  name      String
+  brand     String
+  type      Category
+  image     String?
+  services  ServiceItem[]
+}
+
+model ServiceItem {
+  id        String        @id @default(cuid())
+  title     String
+  price     Decimal
+  partCost  Decimal       @default(0)
+  duration  String
+  device    ServiceDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId  String
+}
+
+model RepairOrder {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deviceName   String
+  serviceName  String
+  price        Decimal
+  cost         Decimal  @default(0)
+  status       String   @default("NEW")
+  customerName String
+  phone        String
+  userId       String?
+  images       String[]
+  internalNotes String? @db.Text
+}
+
+enum ProductStatus {
+  AVAILABLE
+  SOLD
+  RESERVED
+  REPAIR
+  PRE_ORDER
+  ON_REQUEST
+}
+
+enum Category {
+  IPHONE
+  ANDROID
+  TABLET
+  LAPTOP
+  WATCH
+  ACCESSORY
+  OTHER
+}
+
+enum Grade {
+  NEW
+  A_PLUS
+  A
+  B
+  C
+  D
+}

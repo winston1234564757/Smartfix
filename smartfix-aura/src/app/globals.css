@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%; /* Дуже світлий сіро-блакитний (Ice White) */
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 221 83% 53%; /* Яскравий, але м'який синій (Air Blue) */
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 83% 53%;
+ 
+    /* AIR STYLE: Великі радіуси */
+    --radius: 1rem; 
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Додаємо ледь помітний градієнт на фон */
+    background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,0) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,0) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,0) 0, transparent 50%);
+  }
+}
+
+/* Клас для ефекту скла */
+.glass {
+  @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-xl;
+}
+
+/* Клас для "парящих" карток */
+.air-card {
+  @apply transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-indigo-500/10;
+}
+
+
+
+body {
+  position: static !important; /* Забороняємо Radix фіксувати body */
+  padding-right: 0 !important; /* Забороняємо Radix додавати відступ */
+}
+
+/* Коли відкрите модальне вікно/селект - дозволяємо скрол фону (або блокуємо, але без зникнення бару) */
+body[data-scroll-locked] {
+  overflow: visible !important;
+  padding-right: 0 !important;
+}
+
+
+/* 2. Забороняємо Radix UI чіпати body, коли відкритий фільтр */
+body {
+  position: relative !important;
+  padding-right: 0px !important;
+  overflow: auto !important; /* Дозволяємо скрол навіть при відкритому попапі */
+}
+
+/* 3. Перестраховка для атрибутів, які вішає бібліотека */
+body[data-scroll-locked] {
+  padding-right: 0px !important;
+  overflow: auto !important;
+}
+
+/* 4. Забороняємо зсув для будь-яких фіксованих елементів */
+body[data-scroll-locked] .fixed,
+body[data-scroll-locked] header, 
+body[data-scroll-locked] nav {
+  padding-right: 0px !important;
+  margin-right: 0px !important;
+}
+
+
+/* 2. Забороняємо бібліотеці чіпати body */
+body {
+  position: relative !important;
+  padding-right: 0px !important; 
+}
+
+/* 3. Коли відкрито фільтр/модалку - ігноруємо блокування Radix UI */
+body[data-scroll-locked] {
+  padding-right: 0px !important;
+  overflow: auto !important; /* Дозволяємо скрол */
+}
+
+/* 4. Захист для хедера і будь-яких фіксованих блоків */
+body[data-scroll-locked] header,
+body[data-scroll-locked] .fixed,
+body[data-scroll-locked] nav {
+  padding-right: 0px !important;
+  margin-right: 0px !important;
+}
+/* --- STABLE SCROLLBAR FIX --- */
+html {
+  overflow-y: scroll !important; /* Скролбар завжди займає місце */
+  margin-right: 0 !important;
+}
+
+body {
+  overflow-y: scroll !important; /* Дублюємо для надійності */
+  padding-right: 0 !important; /* Ніяких відступів справа */
+  margin-right: 0 !important;
+}
+
+/* Коли відкрите модальне вікно, ігноруємо спроби бібліотеки змінити відступи */
+body[data-scroll-locked] {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+  overflow-y: scroll !important;
+}
+/* --- FINAL STABILITY FIX --- */
+html {
+  overflow-y: scroll !important; /* Скролбар завжди є */
+}
+
+body {
+  overflow-y: scroll !important;
+  padding-right: 0 !important; /* Тіло сторінки не рухається */
+}
+
+/* ІГНОРУВАННЯ БЛОКУВАННЯ */
+body[data-scroll-locked] {
+  padding-right: 0 !important;
+  overflow: auto !important;
+}
+
+/* ІМУНІТЕТ ДЛЯ ХЕДЕРА */
+/* Цей клас ми додамо до хедера, щоб заборонити бібліотеці додавати йому padding */
+.no-shift {
+  padding-right: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important; /* Тримаємо ширину */
+  max-width: 1200px !important; /* Фіксуємо макс. ширину контейнера */
+}
+
+/* Коли відкрито модалку - все одно забороняємо паддінги для цього класу */
+body[data-scroll-locked] .no-shift {
+  padding-right: 0 !important;
+}
